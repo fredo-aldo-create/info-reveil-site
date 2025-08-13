@@ -3,7 +3,7 @@ name: Daily Article
 on:
   schedule:
     - cron: "0 6 * * *"   # 06:00 UTC = 08:00 Paris
-  workflow_dispatch: {}    # <- permet le Run manuel
+  workflow_dispatch: {}    # Permet le lancement manuel
 
 permissions:
   contents: write
@@ -20,8 +20,9 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Debug tree
+      - name: Debug tree (avant génération)
         run: |
+          echo "=== Structure avant génération ==="
           pwd
           ls -la
           find . -maxdepth 3 -type f | sort
@@ -29,6 +30,13 @@ jobs:
       - name: Run generator
         run: |
           python3 scripts/generate_article.py
+
+      - name: Verify generated files
+        run: |
+          echo "=== Articles générés ==="
+          ls -la articles || true
+          echo "=== Images générées ==="
+          ls -la images || true
 
       - name: Debug changes
         run: |
@@ -38,16 +46,10 @@ jobs:
           git --no-pager diff -- index.html | sed -n '1,120p' || true
           echo "=== tail index.html ==="
           tail -n 5 index.html || true
-          echo "=== ls -la (racine) ==="
-          ls -la
 
       - name: Commit & push if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html article_exemple.html
-          git diff --cached --quiet && echo "No changes" || (git commit -m "Daily: inject card + timestamp" && git push)
-
-         
-
-   
+          git add -A
+          git diff --cached --quiet && echo "No changes" || (git commit -m "Daily: publish article + update index" && git push)
