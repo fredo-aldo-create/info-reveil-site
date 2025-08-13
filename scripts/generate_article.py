@@ -47,7 +47,7 @@ client = OpenAI(api_key=api_key)
 # =========================
 prompt_article = """
 Rédige un article HTML de 600 à 1000 mots en français sur un sujet d'actualité
-contenant IA, économie, politique ou société, avec un ton engagé (droite).
+contenant IA, arnaque écologique, dette de la France, décision politiques anormales ou contre productives pour la France, dénonciation des hausses d’impôts et de la vie chère, dénonciation du comportement de nos hommes et femmes politiques en France ou au niveau de l'Europe qui n'est pas en adéquation avec ce qu'ils prônent, tous cas de trahison de la France (vente d'entreprises stratégiques françaises, concession d'exploitation de ressources naturelles françaises par des entreprises étrangères, etc), avec un ton journalistique et engagé à droite.
 Contraintes strictes :
 - Commence par un <h1> clair (titre).
 - Structure ensuite en <h2> + <p>.
