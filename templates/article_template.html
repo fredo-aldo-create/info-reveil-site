@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{TITLE}}</title>
+  <meta name="description" content="{{DESCRIPTION}}" />
+  <link rel="stylesheet" href="../styles.css" />
+  <meta property="og:title" content="{{TITLE}}" />
+  <meta property="og:description" content="{{DESCRIPTION}}" />
+  <meta property="og:image" content="../images/{{HERO_FILENAME}}" />
+</head>
+<body>
+  <article class="article">
+    <header class="article-header">
+      <h1>{{TITLE}}</h1>
+      <p class="article-meta">Par {{AUTHOR}} — {{DATE}}</p>
+      <figure>
+        <img src="../images/{{HERO_FILENAME}}" alt="{{HERO_ALT}}" />
+        <figcaption class="caption">{{HERO_CAPTION}}</figcaption>
+      </figure>
+      <p class="chapo">{{CHAPO}}</p>
+    </header>
+
+    <section class="article-body">
+      {{BODY_HTML}}
+    </section>
+
+    <section class="sources">
+      <h2>Sources</h2>
+      <ol>
+        {{SOURCES_LIST}}
+      </ol>
+    </section>
+  </article>
+</body>
+</html>
