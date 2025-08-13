@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Accueil – Info Citoyenne</title>
+  <style>
+    :root{
+      --bg:#0f172a;      /* fond général */
+      --text:#e5e7eb;    /* texte principal */
+      --muted:#94a3b8;   /* texte secondaire */
+      --card:#111827;    /* carte */
+      --accent:#22d3ee;  /* accent */
+      --ring:rgba(34,211,238,.35);
+    }
+    html,body{margin:0;padding:0;background:linear-gradient(135deg,var(--bg),#111827 60%);color:var(--text);font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    header{padding:1.25rem 1.25rem 0;}
+    .wrap{max-width:1200px;margin:0 auto;padding:0 1.25rem 2rem}
+    h1{margin:.25rem 0 1rem;font-size:clamp(1.6rem,2.5vw,2.2rem);line-height:1.2;background:linear-gradient(90deg,var(--accent),#a78bfa);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .dek{color:var(--muted);margin:0 0 1rem}
+
+    /* Grille de vignettes carrées */
+    .grid{display:grid;gap:1.25rem;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));}
+    .card{background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.35);display:flex;flex-direction:column;transition:transform .15s ease, box-shadow .15s ease}
+    .card:hover{transform:translateY(-2px);box-shadow:0 20px 50px rgba(0,0,0,.45)}
+    .thumb{position:relative;isolation:isolate;aspect-ratio:1/1;background:linear-gradient(135deg,#1f2937,#0b1223);display:block}
+    .thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+    .thumb img[src=""], .thumb img:not([src]){display:none}
+    .card-body{padding:1rem;display:flex;flex-direction:column;gap:.5rem}
+    .title{margin:0;font-size:1.05rem;line-height:1.35}
+    .excerpt{margin:0;color:var(--muted);font-size:.95rem}
+    .meta{display:flex;gap:.75rem;align-items:center;color:#cbd5e1;font-size:.8rem}
+    .link{margin-top:.25rem;align-self:flex-start;color:var(--accent);text-decoration:none;font-weight:600;border-bottom:1px dashed var(--ring)}
+    .link:hover{border-bottom-style:solid}
+    .badge{display:inline-block;border:1px solid var(--ring);padding:.1rem .5rem;border-radius:999px;font-size:.75rem;color:#cbd5e1}
+  </style>
+</head>
+<body>
+  <header class="wrap">
+    <h1>Info Citoyenne — Accueil</h1>
+   
+  </header>
+
+  <main class="wrap">
+    <div class="grid">
+      <!-- ARTICLE le plus récent → plus ancien -->
+      
+      <article class="card">
+        <a class="thumb" href="article_arnaque_eolien.html" aria-label="Lire : L'Énergie Éolienne : Une Arnaque Écologique et Économique ?">
+          <!-- S'il y a une image, indiquer son chemin dans src ci-dessous. Laisser vide sinon pour afficher un carré neutre. -->
+          <img src="images/eolienne.jpg" alt="eolienne">
+        </a>
+        <div class="card-body">
+          <h2 class="title">L'Énergie Éolienne : Une Arnaque Écologique et Économique ?</h2>
+          <p class="excerpt">L'énergie éolienne, vantée comme une solution verte, révèle en réalité une arnaque écologique. Découvrez pourquoi.</p>
+          <div class="meta">
+            <span class="badge">Enquête</span>
+            <span>Publié le 13 août 2025</span>
+          </div>
+          <a class="link" href="article_arnaque_eolien.html">Lire l’article</a>
+        </div>
+      </article>
+      
+      
+      
+      
+      
+      <article class="card">
+        <a class="thumb" href="article_voiture_electrique_plus_propre_vraiment.html" aria-label="Lire : Le mythe de la voiture électrique « propre »">
+          <!-- S'il y a une image, indiquer son chemin dans src ci-dessous. Laisser vide sinon pour afficher un carré neutre. -->
+          <img src="images/voiture-electrique.jpg" alt="Voiture électrique">
+        </a>
+        <div class="card-body">
+          <h2 class="title">Le mythe de la voiture électrique « propre »</h2>
+          <p class="excerpt">Zéro émission à l’échappement ne veut pas dire zéro impact. Fabrication des batteries, autonomie réelle, dégradation et revente : ce que révèlent les chiffres.</p>
+          <div class="meta">
+            <span class="badge">Enquête</span>
+            <span>Publié le 12 août 2025</span>
+          </div>
+          <a class="link" href="article_voiture_electrique_plus_propre_vraiment.html">Lire l’article</a>
+        </div>
+      </article>
+
+      <!-- Pour ajouter d’autres articles, dupliquer le bloc <article class="card"> ci‑dessus
+           et remplacer le lien, le titre, l’extrait, la date, et éventuellement src de l’image. -->
+    </div>
+  </main>
+</body>
+</html>
