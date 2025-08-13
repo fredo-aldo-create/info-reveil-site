@@ -81,7 +81,26 @@ else:
     LEAD_HTML = "<p class=\"lead\">—</p>"
     BODY_HTML = after_h1.strip()
 
-DESCRIPTION = "Résumé court de l’article."
+# Génération automatique d'un résumé court (150–160 caractères) pour la vignette
+prompt_desc = f"""
+À partir de l'article HTML suivant, écris un résumé concis et engageant en français
+de 150 à 160 caractères maximum (pas de HTML, pas de guillemets).
+Article :
+{body_html}
+"""
+
+try:
+    resp_desc = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role":"user", "content": prompt_desc}],
+        temperature=0.5,
+    )
+    DESCRIPTION = resp_desc.choices[0].message.content.strip()
+    print(f"✅ Résumé généré pour la vignette : {DESCRIPTION}")
+except Exception as e:
+    DESCRIPTION = TITLE  # fallback : on met le titre si erreur
+    print(f"⚠️ Échec génération résumé : {e}")
+
 HERO_ALT = "Illustration de l’article"
 
 now = datetime.now(timezone.utc).astimezone()
