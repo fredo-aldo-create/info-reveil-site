@@ -163,6 +163,7 @@ article_html = (tpl
     .replace("{{BODY_HTML}}", BODY_HTML)
     .replace("{{SOURCES_LIST}}", sources_list)
     .replace("{{HERO_ALT}}", HERO_ALT)
+    .replace("{{HERO_FILENAME}}", hero_filename if has_image else "")
 )
 
 if has_image:
