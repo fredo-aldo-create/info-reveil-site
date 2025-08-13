@@ -1,45 +1,59 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import os, base64, re, sys, unicodedata, shutil
+import os, base64, re, sys, unicodedata
 from pathlib import Path
 from datetime import datetime, timezone
 from openai import OpenAI
 
-# ---- chemins / constantes
+# =========================
+# Chemins / constantes
+# =========================
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "index.html"
 ARTICLES = ROOT / "articles"
 IMAGES = ROOT / "images"
 TEMPLATES = ROOT / "templates"
-TEMPLATE = TEMPLATES / "article_template_ir.html"  # <= le nouveau template harmonisé
+TEMPLATE = TEMPLATES / "article_template_ir.html"  # <-- on utilise ce template à chaque article
 
 AUTHOR = "Rédaction INFO-RÉVEIL"
 
-def die(msg): print(f"❌ {msg}"); sys.exit(1)
+def die(msg: str):
+    print(f"❌ {msg}")
+    sys.exit(1)
 
 def slugify(text: str) -> str:
     text = unicodedata.normalize("NFKD", text).encode("ascii","ignore").decode("ascii")
     text = re.sub(r"[^a-zA-Z0-9]+","-", text).strip("-").lower()
     return text or "article"
 
-# ---- vérifs
+# Vérifs de présence
 for p in [INDEX, TEMPLATE]:
-    if not p.exists(): die(f"Fichier manquant: {p.relative_to(ROOT)}")
-ARTICLES.mkdir(exist_ok=True); IMAGES.mkdir(exist_ok=True)
+    if not p.exists():
+        die(f"Fichier manquant: {p.relative_to(ROOT)}")
 
-# ---- OpenAI client
+ARTICLES.mkdir(exist_ok=True)
+IMAGES.mkdir(exist_ok=True)
+
+# =========================
+# Client OpenAI
+# =========================
 api_key = os.getenv("OPENAI_API_KEY")
-if not api_key: die("OPENAI_API_KEY manquant")
+if not api_key:
+    die("OPENAI_API_KEY manquant (Secrets GitHub > Actions).")
 client = OpenAI(api_key=api_key)
 
-# ---- 1) Générer le corps HTML (avec <h1>, <h2>, <p> et [1][2]…)
+# =========================
+# 1) Génération du corps HTML de l’article
+# =========================
 prompt_article = """
-Rédige un article HTML de 600 à 1000 mots en français, ton engagé (droite),
-sur un sujet d'actualité (IA, économie, politique ou société). Contraintes :
-- Commence par un <h1> clair.
-- Structure avec des <h2>.
-- Paragraphes en <p> avec citations [1][2][3]... dans le texte.
-- Ne mets PAS <html>, <head> ni <body>.
+Rédige un article HTML de 600 à 1000 mots en français sur un sujet d'actualité
+contenant IA, économie, politique ou société, avec un ton engagé (droite).
+Contraintes strictes :
+- Commence par un <h1> clair (titre).
+- Structure ensuite en <h2> + <p>.
+- Ajoute des références [1][2][3]… dans le texte là où c’est pertinent.
+- Ne mets PAS de <!doctype>, <html>, <head> ni <body>.
+Réponds UNIQUEMENT avec le HTML du corps de l’article.
 """
 try:
     resp = client.chat.completions.create(
@@ -50,9 +64,11 @@ try:
     body_html = resp.choices[0].message.content.strip()
     print("✅ Article généré (texte).")
 except Exception as e:
-    die(f"Echec génération texte: {e}")
+    die(f"Échec génération texte: {e}")
 
-# ---- 2) Extraire le titre, lead (1er <p> après le <h1>) et le reste
+# =========================
+# 2) Titre, lead (1er <p>) et reste du corps
+# =========================
 m_title = re.search(r"<h1[^>]*>(.*?)</h1>", body_html, flags=re.I|re.S)
 TITLE = (m_title.group(1).strip() if m_title else "Titre provisoire")
 after_h1 = body_html[m_title.end():] if m_title else body_html
@@ -65,64 +81,122 @@ else:
     LEAD_HTML = "<p class=\"lead\">—</p>"
     BODY_HTML = after_h1.strip()
 
-DESCRIPTION = "Résumé court de l’article (150–160 caractères)."
+DESCRIPTION = "Résumé court de l’article."
 HERO_ALT = "Illustration de l’article"
-today = datetime.now(timezone.utc).astimezone()
-date_str = today.strftime("%d/%m/%Y")
-stamp = today.strftime("%Y-%m-%d %H:%M:%S %z")
-slug = f"{today.date().isoformat()}-{slugify(TITLE)[:60]}"
+
+now = datetime.now(timezone.utc).astimezone()
+date_str = now.strftime("%d/%m/%Y")
+stamp = now.strftime("%Y-%m-%d %H:%M:%S %z")
+slug = f"{now.date().isoformat()}-{slugify(TITLE)[:60]}"
 article_filename = f"{slug}.html"
 hero_filename = f"{slug}-hero.jpg"
 
-# ---- 3) Générer l'image héro (ou fallback)
+# =========================
+# 3) Génération de l'image héro (AUCUN fallback)
+# =========================
+has_image = False
 img_prompt = f"Illustration réaliste, style photojournalisme, pour un article intitulé « {TITLE} »"
 try:
     img_resp = client.images.generate(model="gpt-image-1", prompt=img_prompt, size="1024x1024")
     image_b64 = img_resp.data[0].b64_json
     (IMAGES / hero_filename).write_bytes(base64.b64decode(image_b64))
+    has_image = True
     print(f"✅ Image générée: images/{hero_filename}")
 except Exception as e:
-    print(f"⚠️ Échec image IA ({e}) — fallback sur une image locale si dispo.")
-    fallback = IMAGES / "eolienne.jpg"
-    if fallback.exists(): shutil.copyfile(fallback, IMAGES / hero_filename)
-    else: (IMAGES / hero_filename).write_bytes(b"")
+    # Aucun fallback : on laissera un espace vide dans l'article et la vignette
+    has_image = False
+    print(f"ℹ️ Pas d'image générée ({e}). Un espace vide sera affiché.")
 
-# ---- 4) Préparer la liste des sources (placeholder pour l’instant)
-# (option: faire générer une liste <li>…</li> par l’IA et l'injecter)
-sources_list = "<li>[1] Source à compléter</li>"
+# =========================
+# 4) Génération de la liste de sources cliquables
+# =========================
+prompt_sources = f"""
+À partir de l'article HTML ci-dessous, produis une liste HTML <li>…</li> de 3 à 8 sources FIABLES,
+avec des liens cliquables complets : <li><a href="URL" target="_blank" rel="noopener noreferrer">Titre de la source</a></li>.
+Exclusivement des <li> (pas de texte autour).
+Article :
+{body_html}
+"""
+try:
+    resp_sources = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role":"user","content": prompt_sources}],
+        temperature=0.3,
+    )
+    sources_list_raw = resp_sources.choices[0].message.content.strip()
+    lis = re.findall(r"<li[\s\S]*?</li>", sources_list_raw, flags=re.I)
+    sources_list = "\n".join(lis) if lis else '<li><a href="#" target="_blank" rel="noopener noreferrer">Source à compléter</a></li>'
+    print("✅ Sources cliquables générées.")
+except Exception as e:
+    print(f"⚠️ Échec génération sources ({e}); placeholder utilisé.")
+    sources_list = '<li><a href="#" target="_blank" rel="noopener noreferrer">Source à compléter</a></li>'
 
-# ---- 5) Composer l'article final avec le template harmonisé
+# =========================
+# 5) Composer l'article final avec le template harmonisé
+#    - Si image absente : on remplace <figure class="img">…</figure> par un espace vide.
+#    - Sinon : on force le chemin absolu /images/<fichier>
+# =========================
 tpl = TEMPLATE.read_text(encoding="utf-8")
+
 article_html = (tpl
     .replace("{{TITLE}}", TITLE)
-    .replace("{{HERO_FILENAME}}", hero_filename)
-    .replace("{{HERO_ALT}}", HERO_ALT)
     .replace("{{LEAD_HTML}}", LEAD_HTML)
     .replace("{{BODY_HTML}}", BODY_HTML)
     .replace("{{SOURCES_LIST}}", sources_list)
+    .replace("{{HERO_ALT}}", HERO_ALT)
 )
+
+if has_image:
+    # Corriger le chemin pour être absolu depuis la racine
+    article_html = re.sub(
+        r'src=["\']images/\{\{HERO_FILENAME\}\}["\']',
+        f'src="/images/{hero_filename}"',
+        article_html,
+        flags=re.I
+    )
+else:
+    # Supprimer la figure d'image et la remplacer par un espace vide
+    article_html = re.sub(
+        r'\s*<figure\s+class="img">[\s\S]*?</figure>\s*',
+        '\n<div style="height:24px"></div>\n',
+        article_html,
+        flags=re.I
+    )
+
 (ARTICLES / article_filename).write_text(article_html, encoding="utf-8")
 print(f"✅ Article écrit: articles/{article_filename}")
 
-# ---- 6) Insérer la carte en haut du feed (inchangé)
+# =========================
+# 6) Insérer la carte en haut du flux d'index.html
+#    - Si pas d'image, on met un bloc vide au lieu d’un <img>.
+# =========================
 idx_html = INDEX.read_text(encoding="utf-8")
 if "<!-- FEED:start -->" not in idx_html or "<!-- FEED:end -->" not in idx_html:
-    grid_open = re.search(r"<(main|div)([^>]*\\bclass=[\"'][^\"']*\\bgrid\\b[^\"']*[\"'][^>]*)>", idx_html, flags=re.I)
+    grid_open = re.search(r"<(main|div)([^>]*\bclass=[\"'][^\"']*\bgrid\b[^\"']*[\"'][^>]*)>", idx_html, flags=re.I)
     if grid_open:
         pos = grid_open.end()
         idx_html = idx_html[:pos] + "\n<!-- FEED:start -->\n<!-- FEED:end -->\n" + idx_html[pos:]
     else:
         body_open = re.search(r"<body[^>]*>", idx_html, flags=re.I)
-        if not body_open: die("Impossible de trouver <body> pour insérer le feed.")
+        if not body_open:
+            die("Impossible de trouver <body> pour insérer le feed.")
         pos = body_open.end()
         idx_html = idx_html[:pos] + '\n<main class="grid">\n<!-- FEED:start -->\n<!-- FEED:end -->\n</main>\n' + idx_html[pos:]
+
+if has_image:
+    thumb_block = f'''<a class="thumb" href="articles/{article_filename}" aria-label="Lire : {TITLE}">
+          <img src="images/{hero_filename}" alt="{HERO_ALT}">
+        </a>'''
+else:
+    # Bloc vide 16/9 pour éviter l’icône d’image cassée
+    thumb_block = f'''<a class="thumb" href="articles/{article_filename}" aria-label="Lire : {TITLE}">
+          <div style="aspect-ratio:16/9;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)"></div>
+        </a>'''
 
 card_html = f"""
       <!-- card-{slug} -->
       <article class="card">
-        <a class="thumb" href="articles/{article_filename}" aria-label="Lire : {TITLE}">
-          <img src="images/{hero_filename}" alt="{HERO_ALT}">
-        </a>
+        {thumb_block}
         <div class="card-body">
           <h2 class="title">{TITLE}</h2>
           <p class="excerpt">{DESCRIPTION}</p>
@@ -136,5 +210,6 @@ card_html = f"""
 """.rstrip()
 
 idx_html = re.sub(r"(<!-- FEED:start -->)", r"\1\n" + card_html, idx_html, count=1, flags=re.S)
-INDEX.write_text(idx_html + f"\n<!-- automated-build {stamp} -->\n", encoding="utf-8")
+idx_html = idx_html + f"\n<!-- automated-build {stamp} -->\n"
+INDEX.write_text(idx_html, encoding="utf-8")
 print("✅ Vignette insérée + index.html mis à jour.")
