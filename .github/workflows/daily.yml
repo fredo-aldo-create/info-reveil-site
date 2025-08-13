@@ -3,7 +3,7 @@ name: Daily Article
 on:
   schedule:
     - cron: "0 6 * * *"   # 06:00 UTC = 08:00 Paris
-  workflow_dispatch: {}    # <- permet un Run manuel
+  workflow_dispatch: {}    # Permet un lancement manuel
 
 permissions:
   contents: write
@@ -27,6 +27,7 @@ jobs:
 
       - name: Debug tree (avant génération)
         run: |
+          echo "=== Structure avant génération ==="
           pwd
           ls -la
           find . -maxdepth 3 -type f | sort
@@ -39,9 +40,10 @@ jobs:
 
       - name: Verify generated files
         run: |
-          echo "=== Vérification existence fichiers ==="
-          ls -l article_*.html || true
-          grep -q "<h1" index.html && echo "Index contient un titre"
+          echo "=== Articles générés ==="
+          ls -la articles || true
+          echo "=== Images (10 dernières) ==="
+          ls -lt images | head -n 10 || true
 
       - name: Debug changes
         run: |
@@ -51,12 +53,10 @@ jobs:
           git --no-pager diff -- index.html | sed -n '1,120p' || true
           echo "=== tail index.html ==="
           tail -n 5 index.html || true
-          echo "=== ls -la (racine) ==="
-          ls -la
 
       - name: Commit & push if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html article_*.html images/
-          git diff --cached --quiet && echo "No changes" || (git commit -m "Daily: new article + index update" && git push)
+          git add -A
+          git diff --cached --quiet && echo "No changes" || (git commit -m "Daily: publish article + update index" && git push)
