@@ -127,7 +127,7 @@ client = OpenAI(api_key=api_key)
 # =========================
 prompt_article = """
 Rédige un article HTML de 600 à 1000 mots en français sur un sujet d'actualité
-contenant géopolitique mondiale (pro Trump), IA (avancées mais aussi dangers liés à l'IA), disparition de nos libertés, l'arnaque écologique, dette de la France, dilapidation de l'argent des Français, décisions politiques anormales ou contre productives pour la France, dénonciation des hausses d’impôts et de la vie chère, dénonciation du comportement de nos hommes et femmes politiques en France ou au niveau de l'Europe qui n'est pas en adéquation avec ce qu'ils prônent, tous cas de trahison de la France.
+contenant traitant de (au choix) : géopolitique mondiale (pro Trump), IA (avancées mais aussi dangers liés à l'IA), disparition de nos libertés, l'arnaque écologique, dette de la France, dilapidation de l'argent des Français, décisions politiques anormales ou contre productives pour la France, dénonciation des hausses d’impôts et de la vie chère, dénonciation du comportement de nos hommes et femmes politiques en France ou au niveau de l'Europe qui n'est pas en adéquation avec ce qu'ils prônent, tous cas de trahison de la France.
 Contraintes strictes :
 - Commence par un <h1> clair (titre).
 - Structure ensuite en <h2> + <p>.
