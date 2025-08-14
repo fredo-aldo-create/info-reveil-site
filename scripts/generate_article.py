@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import os, base64, re, sys, unicodedata, requests
+import os, base64, re, sys, unicodedata, requests, time
 from pathlib import Path
 from datetime import datetime, timezone
 from openai import OpenAI
@@ -31,12 +31,12 @@ WHITELIST_DOMAINS = [
     # --- Agences & internationaux ---
     "reuters.com","apnews.com","bbc.com","ft.com","bloomberg.com",
 
-    # --- Anglophones réputés (journaux/magazines) ---
+    # --- Anglophones réputés ---
     "nytimes.com","washingtonpost.com","wsj.com","theguardian.com",
     "economist.com","time.com","newsweek.com","forbes.com","cbsnews.com",
     "nbcnews.com","abcnews.go.com","npr.org","axios.com","politico.com",
-    "financialtimes.com",  # alias supplémentaire de ft.com
-    "theatlantic.com","foreignaffairs.com","nature.com","science.org",
+    "financialtimes.com","theatlantic.com","foreignaffairs.com",
+    "nature.com","science.org",
 
     # --- Institutions & organisations internationales ---
     "oecd.org","imf.org","worldbank.org","un.org","unesco.org","who.int",
@@ -107,32 +107,68 @@ def build_queries_from_article(html: str, max_queries: int = 4) -> list[str]:
             seen.add(key); uniq.append(s)
     return uniq[:max_queries] if uniq else ["actualité politique France", "dette publique France"]
 
-def search_duckduckgo(query: str, whitelist: list[str], max_results: int = 5) -> list[str]:
-    """Recherche DuckDuckGo HTML (sans API), FR préféré, renvoie des <li> cliquables filtrés par whitelist."""
-    url = "https://duckduckgo.com/html/"
+def _ddg_fetch(url: str, method: str, params=None, data=None, timeout=15):
     headers = {
         "User-Agent": "Mozilla/5.0",
-        "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8"
+        "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+        "Referer": "https://duckduckgo.com/"
     }
-    params = {"q": query, "kl": "fr-fr"}   # forcer FR
-    r = requests.get(url, params=params, headers=headers, timeout=15)
+    if method == "GET":
+        r = requests.get(url, params=params, headers=headers, timeout=timeout)
+    else:
+        r = requests.post(url, data=data, headers=headers, timeout=timeout)
     r.raise_for_status()
+    return r.text
 
-    soup = BeautifulSoup(r.text, "html.parser")
+def _ddg_parse_items(html: str) -> list[tuple[str,str]]:
+    """Retourne une liste [(href, title)] depuis la page résultats DDG."""
+    soup = BeautifulSoup(html, "html.parser")
     items = []
-    for a in soup.select("a.result__a"):
+    # sélecteurs possibles selon version
+    anchors = soup.select("a.result__a")
+    if not anchors:
+        anchors = soup.select(".result__title a")
+    for a in anchors:
         href_raw = (a.get("href") or "").strip()
         title = a.get_text(strip=True)
         href = ddg_decode_url(href_raw)
-        dom = extract_domain(href)
-        if not href or not title or not dom:
-            continue
-        if not any(dom.endswith(wd) or wd in dom for wd in whitelist):
-            continue
-        items.append(f'<li><a href="{href}" target="_blank" rel="noopener noreferrer">{title}</a></li>')
-        if len(items) >= max_results:
-            break
+        if href and title:
+            items.append((href, title))
     return items
+
+def search_duckduckgo(query: str, whitelist: list[str], max_results: int = 5) -> list[str]:
+    """
+    Recherche DuckDuckGo HTML (sans API), FR préféré, renvoie des <li> cliquables filtrés par whitelist.
+    Essaie GET /html, puis POST /html, puis /lite en dernier recours.
+    """
+    attempts = [
+        ("GET", "https://duckduckgo.com/html/", {"q": query, "kl": "fr-fr"}, None),
+        ("POST", "https://duckduckgo.com/html/", None, {"q": query, "kl": "fr-fr"}),
+        ("GET", "https://duckduckgo.com/lite/", {"q": query, "kl": "fr-fr"}, None),
+    ]
+    found = []
+    for method, url, params, data in attempts:
+        try:
+            page = _ddg_fetch(url, method, params=params, data=data, timeout=15)
+            pairs = _ddg_parse_items(page)
+            if not pairs:
+                continue
+            for href, title in pairs:
+                dom = extract_domain(href)
+                if not any(dom.endswith(wd) or wd in dom for wd in whitelist):
+                    continue
+                found.append(f'<li><a href="{href}" target="_blank" rel="noopener noreferrer">{title}</a></li>')
+                if len(found) >= max_results:
+                    break
+            if found:
+                break  # on a des résultats valides, on arrête
+        except Exception as e:
+            # on continue avec l'autre tentative
+            continue
+        finally:
+            # petite pause pour éviter toute limite côté DDG
+            time.sleep(1)
+    return found
 
 # =========================
 # Vérifs de base
@@ -157,7 +193,16 @@ client = OpenAI(api_key=api_key)
 # =========================
 prompt_article = """
 Rédige un article HTML de 600 à 1000 mots en français sur un sujet d'actualité
-contenant (au choix) : géopolitique mondiale (pro Trump), IA (avancées mais aussi dangers liés à l'IA), disparition de nos libertés, l'arnaque écologique, dette de la France, dilapidation de l'argent des Français, décisions politiques anormales ou contre productives pour la France, dénonciation des hausses d’impôts et de la vie chère, dénonciation du comportement de nos hommes et femmes politiques en France ou au niveau de l'Europe qui n'est pas en adéquation avec ce qu'ils prônent, tous cas de trahison de la France (vente d'entreprises stratégiques françaises, concession d'exploitation de ressources naturelles françaises par des entreprises étrangères, etc), avec un ton journalistique et engagé à droite.
+contenant un sujet au choix à propos de : géopolitique mondiale (pro Trump),
+IA (avancées mais aussi dangers liés à l'IA), disparition de nos libertés,
+l'arnaque écologique, dette de la France, dilapidation de l'argent des Français,
+décisions politiques anormales ou contre productives pour la France, dénonciation
+des hausses d’impôts et de la vie chère, dénonciation du comportement de nos
+hommes et femmes politiques en France ou au niveau de l'Europe qui n'est pas en
+adéquation avec ce qu'ils prônent, tous cas de trahison de la France (vente
+d'entreprises stratégiques françaises, concession d'exploitation de ressources
+naturelles françaises par des entreprises étrangères, etc), avec un ton
+journalistique et engagé à droite.
 Contraintes strictes :
 - Commence par un <h1> clair (titre).
 - Structure ensuite en <h2> + <p>.
@@ -217,7 +262,7 @@ hero_filename = f"{slug}-hero.jpg"
 has_image = False
 img_prompt = f"Illustration réaliste, style photojournalisme, pour un article intitulé « {TITLE} »"
 try:
-    # Utilise un format plus léger que 1024x1024
+    # format plus léger
     img_resp = client.images.generate(model="gpt-image-1", prompt=img_prompt, size="768x768")
     image_b64 = img_resp.data[0].b64_json
     (IMAGES / hero_filename).write_bytes(base64.b64decode(image_b64))
@@ -228,12 +273,12 @@ except Exception as e:
     print(f"ℹ️ Pas d'image générée ({e}). Un espace vide sera affiché.")
 
 # =========================
-# 4) Génération des sources via DuckDuckGo (2 passes + whitelist FR/EN)
+# 4) Génération des sources via DuckDuckGo (3 tentatives + fallback site:)
 # =========================
 queries = build_queries_from_article(body_html, max_queries=4)
 collected, seen = [], set()
 
-def add_results(li_list):
+def add_results(li_list, label=""):
     added = 0
     for li in li_list:
         m = re.search(r'href="([^"]+)".*?>(.*?)</a>', li, flags=re.I|re.S)
@@ -249,33 +294,39 @@ def add_results(li_list):
         added += 1
         if len(collected) >= 6:
             break
+    if label:
+        print(f"• {label}: +{added} liens")
     return added
 
-# Pass 1 : requêtes naturelles (FR préféré)
+# Pass 1 : requêtes naturelles
 for q in queries:
+    print(f"DDG query: {q}")
     try:
         results = search_duckduckgo(q, WHITELIST_DOMAINS, max_results=5)
-        add_results(results)
+        add_results(results, "pass1")
     except Exception as e:
         print(f"⚠️ DuckDuckGo erreur sur '{q}': {e}")
     if len(collected) >= 6:
         break
+    time.sleep(1)
 
-# Pass 2 (fallback) : si trop peu de liens, requêtes 'site:<domaine> Titre'
+# Pass 2 : fallback par domaines si < 3 liens
 if len(collected) < 3:
     title_text = re.sub(r"<[^>]+>", " ", TITLE).strip()
     for dom in WHITELIST_DOMAINS:
         q = f'site:{dom} {title_text}'
+        print(f"DDG fallback query: {q}")
         try:
             results = search_duckduckgo(q, WHITELIST_DOMAINS, max_results=3)
-            add_results(results)
+            add_results(results, "pass2")
         except Exception as e:
             print(f"⚠️ DuckDuckGo fallback erreur sur '{q}': {e}")
         if len(collected) >= 6:
             break
+        time.sleep(1)
 
 sources_list = "\n".join(collected) if collected else '<li><a href="#" target="_blank" rel="noopener noreferrer">Sources à compléter</a></li>'
-print("✅ Sources générées via DuckDuckGo.")
+print(f"✅ Sources générées via DuckDuckGo. Total: {len(collected)} lien(s)")
 
 # =========================
 # 5) Composer l'article final (template harmonisé)
