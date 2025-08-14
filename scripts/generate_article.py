@@ -19,14 +19,34 @@ TEMPLATE = TEMPLATES / "article_template_ir.html"  # template harmonisé
 
 AUTHOR = "Rédaction INFO-RÉVEIL"
 
-# Domains autorisés pour les sources (à ajuster selon tes préférences)
+# Domains autorisés pour les sources (FR + anglophones réputés)
 WHITELIST_DOMAINS = [
+    # --- FR médias & institutions ---
     "lemonde.fr","lefigaro.fr","lesechos.fr","latribune.fr","lepoint.fr",
     "bfmtv.com","francetvinfo.fr","liberation.fr","ouest-france.fr",
     "eur-lex.europa.eu","ec.europa.eu","europarl.europa.eu",
     "assemblee-nationale.fr","senat.fr","impots.gouv.fr","insee.fr",
     "banque-france.fr","courdescomptes.fr","ecologie.gouv.fr",
+
+    # --- Agences & internationaux ---
     "reuters.com","apnews.com","bbc.com","ft.com","bloomberg.com",
+
+    # --- Anglophones réputés (journaux/magazines) ---
+    "nytimes.com","washingtonpost.com","wsj.com","theguardian.com",
+    "economist.com","time.com","newsweek.com","forbes.com","cbsnews.com",
+    "nbcnews.com","abcnews.go.com","npr.org","axios.com","politico.com",
+    "financialtimes.com",  # alias supplémentaire de ft.com
+    "theatlantic.com","foreignaffairs.com","nature.com","science.org",
+
+    # --- Institutions & organisations internationales ---
+    "oecd.org","imf.org","worldbank.org","un.org","unesco.org","who.int",
+    "wto.org","nato.int","weforum.org",
+
+    # --- UK Gov & autres officiels ---
+    "gov.uk","ons.gov.uk","bankofengland.co.uk",
+
+    # --- US Gov ---
+    "whitehouse.gov","congress.gov","treasury.gov","census.gov","federalreserve.gov",
 ]
 
 # =========================
@@ -71,21 +91,31 @@ def ddg_decode_url(href: str) -> str:
         return href
 
 def build_queries_from_article(html: str, max_queries: int = 4) -> list[str]:
-    """Construit 2–4 requêtes à partir du titre, h2 et 1ers paragraphes."""
+    """Construit 2–4 requêtes à partir du titre, h2 et 1ers paragraphes (nettoyés/dédupliqués)."""
     title_m = re.search(r"<h1[^>]*>(.*?)</h1>", html, flags=re.I|re.S)
     title = re.sub(r"<[^>]+>", " ", title_m.group(1)).strip() if title_m else ""
-    h2s = [re.sub(r"<[^>]+>"," ", m).strip() for m in re.findall(r"<h2[^>]*>(.*?)</h2>", html, flags=re.I|re.S)]
-    first_paras = [re.sub(r"<[^>]+>"," ", p).strip() for p in re.findall(r"<p[^>]*>(.*?)</p>", html, flags=re.I|re.S)[:2]]
-    seeds = [title] + h2s + first_paras
-    seeds = [re.sub(r"\s+"," ", s) for s in seeds if s]
-    return seeds[:max_queries] if seeds else ["actualité politique France", "dette publique France"]
+    h2s = [re.sub(r"<[^>]+>", " ", m).strip() for m in re.findall(r"<h2[^>]*>(.*?)</h2>", html, flags=re.I|re.S)]
+    paras = [re.sub(r"<[^>]+>", " ", p).strip() for p in re.findall(r"<p[^>]*>(.*?)</p>", html, flags=re.I|re.S)[:2]]
+
+    seeds = [title] + h2s + paras
+    seeds = [re.sub(r"\s+", " ", s) for s in seeds if s]
+    # déduplication
+    seen = set(); uniq = []
+    for s in seeds:
+        key = s.lower()
+        if key not in seen:
+            seen.add(key); uniq.append(s)
+    return uniq[:max_queries] if uniq else ["actualité politique France", "dette publique France"]
 
 def search_duckduckgo(query: str, whitelist: list[str], max_results: int = 5) -> list[str]:
-    """Recherche DuckDuckGo HTML et retourne des <li> cliquables filtrés par whitelist."""
+    """Recherche DuckDuckGo HTML (sans API), FR préféré, renvoie des <li> cliquables filtrés par whitelist."""
     url = "https://duckduckgo.com/html/"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    data = {"q": query}
-    r = requests.post(url, data=data, headers=headers, timeout=12)
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8"
+    }
+    params = {"q": query, "kl": "fr-fr"}   # forcer FR
+    r = requests.get(url, params=params, headers=headers, timeout=15)
     r.raise_for_status()
 
     soup = BeautifulSoup(r.text, "html.parser")
@@ -123,18 +153,18 @@ if not api_key:
 client = OpenAI(api_key=api_key)
 
 # =========================
-# 1) Génération de l'article HTML (texte)
+# 1) Génération du corps HTML de l’article
 # =========================
 prompt_article = """
 Rédige un article HTML de 600 à 1000 mots en français sur un sujet d'actualité
-contenant traitant de (au choix) : géopolitique mondiale (pro Trump), IA (avancées mais aussi dangers liés à l'IA), disparition de nos libertés, l'arnaque écologique, dette de la France, dilapidation de l'argent des Français, décisions politiques anormales ou contre productives pour la France, dénonciation des hausses d’impôts et de la vie chère, dénonciation du comportement de nos hommes et femmes politiques en France ou au niveau de l'Europe qui n'est pas en adéquation avec ce qu'ils prônent, tous cas de trahison de la France.
+contenant géopolitique mondiale (pro Trump), IA (avancées mais aussi dangers liés à l'IA), disparition de nos libertés, l'arnaque écologique, dette de la France, dilapidation de l'argent des Français, décisions politiques anormales ou contre productives pour la France, dénonciation des hausses d’impôts et de la vie chère, dénonciation du comportement de nos hommes et femmes politiques en France ou au niveau de l'Europe qui n'est pas en adéquation avec ce qu'ils prônent, tous cas de trahison de la France (vente d'entreprises stratégiques françaises, concession d'exploitation de ressources naturelles françaises par des entreprises étrangères, etc), avec un ton journalistique et engagé à droite.
 Contraintes strictes :
 - Commence par un <h1> clair (titre).
 - Structure ensuite en <h2> + <p>.
-- Ajoute des références [1][2][3]… dans le texte.
-- N'inclus PAS de section "Références" ni "Sources".
-- Pas de <!doctype>, <html>, <head>, <body>.
-Réponds UNIQUEMENT avec le HTML du corps.
+- Ajoute des références [1][2][3]… dans le texte là où c’est pertinent.
+- N'inclus PAS de section "Références" ni "Sources" dans le corps de l'article.
+- Ne mets PAS de <!doctype>, <html>, <head> ni <body>.
+Réponds UNIQUEMENT avec le HTML du corps de l’article.
 """
 try:
     resp = client.chat.completions.create(
@@ -148,7 +178,7 @@ except Exception as e:
     die(f"Échec génération texte: {e}")
 
 # =========================
-# 2) Titre, lead et corps
+# 2) Titre, lead (1er <p>) et reste du corps (+ filet anti doublons Sources/Références)
 # =========================
 m_title = re.search(r"<h1[^>]*>(.*?)</h1>", body_html, flags=re.I|re.S)
 TITLE = (m_title.group(1).strip() if m_title else "Titre provisoire")
@@ -162,6 +192,7 @@ else:
     LEAD_HTML = "<p class=\"lead\">—</p>"
     BODY_HTML = after_h1.strip()
 
+# Supprime toute section "Références"/"Sources" résiduelle dans le corps
 BODY_HTML = re.sub(
     r'(<h2[^>]*>\s*(références?|sources?)\s*</h2>[\s\S]*?)((<h2\b)|$)',
     lambda m: m.group(3) if m.group(3) else '',
@@ -169,6 +200,7 @@ BODY_HTML = re.sub(
     flags=re.I
 )
 
+# Excerpt court pour la vignette (local, pas d’appel API)
 DESCRIPTION = make_excerpt(LEAD_HTML, BODY_HTML, 150, 160)
 HERO_ALT = "Illustration de l’article"
 
@@ -180,31 +212,30 @@ article_filename = f"{slug}.html"
 hero_filename = f"{slug}-hero.jpg"
 
 # =========================
-# 3) Génération de l'image héro
+# 3) Génération de l'image héro (AUCUN fallback)
 # =========================
 has_image = False
 img_prompt = f"Illustration réaliste, style photojournalisme, pour un article intitulé « {TITLE} »"
 try:
+    # Utilise un format plus léger que 1024x1024
     img_resp = client.images.generate(model="gpt-image-1", prompt=img_prompt, size="768x768")
     image_b64 = img_resp.data[0].b64_json
     (IMAGES / hero_filename).write_bytes(base64.b64decode(image_b64))
     has_image = True
     print(f"✅ Image générée: images/{hero_filename}")
 except Exception as e:
+    has_image = False
     print(f"ℹ️ Pas d'image générée ({e}). Un espace vide sera affiché.")
 
 # =========================
-# 4) Génération des sources via DuckDuckGo
+# 4) Génération des sources via DuckDuckGo (2 passes + whitelist FR/EN)
 # =========================
 queries = build_queries_from_article(body_html, max_queries=4)
 collected, seen = [], set()
-for q in queries:
-    try:
-        results = search_duckduckgo(q, WHITELIST_DOMAINS, max_results=5)
-    except Exception as e:
-        print(f"⚠️ DuckDuckGo erreur sur '{q}': {e}")
-        results = []
-    for li in results:
+
+def add_results(li_list):
+    added = 0
+    for li in li_list:
         m = re.search(r'href="([^"]+)".*?>(.*?)</a>', li, flags=re.I|re.S)
         if not m:
             continue
@@ -215,18 +246,44 @@ for q in queries:
             continue
         seen.add(key)
         collected.append(li)
+        added += 1
         if len(collected) >= 6:
             break
+    return added
+
+# Pass 1 : requêtes naturelles (FR préféré)
+for q in queries:
+    try:
+        results = search_duckduckgo(q, WHITELIST_DOMAINS, max_results=5)
+        add_results(results)
+    except Exception as e:
+        print(f"⚠️ DuckDuckGo erreur sur '{q}': {e}")
     if len(collected) >= 6:
         break
+
+# Pass 2 (fallback) : si trop peu de liens, requêtes 'site:<domaine> Titre'
+if len(collected) < 3:
+    title_text = re.sub(r"<[^>]+>", " ", TITLE).strip()
+    for dom in WHITELIST_DOMAINS:
+        q = f'site:{dom} {title_text}'
+        try:
+            results = search_duckduckgo(q, WHITELIST_DOMAINS, max_results=3)
+            add_results(results)
+        except Exception as e:
+            print(f"⚠️ DuckDuckGo fallback erreur sur '{q}': {e}")
+        if len(collected) >= 6:
+            break
 
 sources_list = "\n".join(collected) if collected else '<li><a href="#" target="_blank" rel="noopener noreferrer">Sources à compléter</a></li>'
 print("✅ Sources générées via DuckDuckGo.")
 
 # =========================
-# 5) Composition de l'article final
+# 5) Composer l'article final (template harmonisé)
+#    - Remplacer {{HERO_FILENAME}} ; si pas d'image : enlever la figure et mettre un espace
+#    - Forcer le chemin image à /images/<fichier> (absolu)
 # =========================
 tpl = TEMPLATE.read_text(encoding="utf-8")
+
 article_html = (tpl
     .replace("{{TITLE}}", TITLE)
     .replace("{{LEAD_HTML}}", LEAD_HTML)
@@ -237,6 +294,7 @@ article_html = (tpl
 )
 
 if has_image:
+    # Force le chemin absolu pour l'article (qui vit sous /articles/)
     article_html = re.sub(
         r'src=["\']/?images/\{\{HERO_FILENAME\}\}["\']',
         f'src="/images/{hero_filename}"',
@@ -244,6 +302,7 @@ if has_image:
         flags=re.I
     )
 else:
+    # Supprime le bloc <figure class="img">...</figure> et laisse un espace
     article_html = re.sub(
         r'\s*<figure\s+class="img">[\s\S]*?</figure>\s*',
         '\n<div style="height:24px"></div>\n',
@@ -255,7 +314,8 @@ else:
 print(f"✅ Article écrit: articles/{article_filename}")
 
 # =========================
-# 6) Insertion vignette dans index.html
+# 6) Insérer la carte en haut du flux (index.html)
+#    - Si pas d'image: bloc 16/9 vide
 # =========================
 idx_html = INDEX.read_text(encoding="utf-8")
 if "<!-- FEED:start -->" not in idx_html or "<!-- FEED:end -->" not in idx_html:
@@ -296,6 +356,6 @@ card_html = f"""
 """.rstrip()
 
 idx_html = re.sub(r"(<!-- FEED:start -->)", r"\1\n" + card_html, idx_html, count=1, flags=re.S)
-idx_html += f"\n<!-- automated-build {stamp} -->\n"
+idx_html = idx_html + f"\n<!-- automated-build {stamp} -->\n"
 INDEX.write_text(idx_html, encoding="utf-8")
 print("✅ Vignette insérée + index.html mis à jour.")
