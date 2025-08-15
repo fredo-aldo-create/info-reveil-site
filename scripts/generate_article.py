@@ -136,7 +136,7 @@ Ton : journalistique et engagé à droite.
 Contraintes strictes :
 - Commence par un <h1> clair (titre).
 - Structure ensuite en <h2> + <p>.
-- Ajoute des références [1][2][3]… dans le texte là où c’est pertinent.
+- N'ajoute AUCUNE numérotation de référence (pas de [1], [2], [3], etc.).
 - N'inclus PAS de section "Références" ni "Sources" dans le corps de l'article.
 - Ne mets PAS de <!doctype>, <html>, <head> ni <body>.
 Réponds UNIQUEMENT avec le HTML du corps de l’article.
