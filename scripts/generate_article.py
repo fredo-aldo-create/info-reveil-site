@@ -124,7 +124,7 @@ def generate_article_body() -> str:
     prompt_article = """
 Rédige un article HTML de 600 à 1000 mots en français sur un sujet d'actualité
 contenant un sujet au choix à propos de : 
-  - géopolitique mondiale (pro Trump),
+  - d'un sujet de l'actualité française ou internationale
 Ton : journalistique et engagé à droite.
 Contraintes strictes :
 - Commence par un <h1> clair (titre).
