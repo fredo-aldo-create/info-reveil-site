@@ -87,8 +87,10 @@ def generate_image_with_retries(title: str, out_path: Path) -> bool:
     Retourne True si le fichier a été écrit.
     """
     prompts = [
-        f"Illustration photojournalisme, réalisme soigné, contraste modéré, pour l’article « {title} »",
-        f"Photo d’illustration éditoriale, sujet correspondant au titre : « {title} », composition nette",
+       f"Illustration photo réaliste, pour l’article « {title} »",
+      
+       # f"Illustration photojournalisme, réalisme soigné, contraste modéré, pour l’article « {title} »",
+       # f"Photo d’illustration éditoriale, sujet correspondant au titre : « {title} », composition nette",
     ]
     sizes = ["768x768", "1024x576", "1024x1024"]  # formats compatibles
     for p in prompts:
