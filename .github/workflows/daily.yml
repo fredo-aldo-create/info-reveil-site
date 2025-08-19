@@ -2,7 +2,7 @@ name: Daily Article
 
 on:
   schedule:
-    - cron: "0 6 * * *"   # 06:00 UTC = 08:00 Paris
+    - cron: "0 5 * * *"   # 05:00 UTC = 07:00 Paris
   workflow_dispatch: {}    # Permet un lancement manuel
 
 permissions:
